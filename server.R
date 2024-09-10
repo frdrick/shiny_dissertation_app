@@ -6,158 +6,384 @@
 #
 #    https://shiny.posit.co/
 #
-
+rm(list=ls())
 library(shiny)
 library(tidyverse)
 library(scales)
 theme_set(theme_bw())
- 
+
 
 # Define server logic required to draw a histogram
 function(input, output, session) {
   # Observe changes in the `scale` input and modify the title string accordingly
   reactive_settings <- reactive({
-    if (input$GHG == "CO2") {
-      list(
-        subtitle = expression(CO[2] ~ " (tonnes)"),
-        landcover = c(
-          "Barren",
-          "Forestland",
-          "Wetland",
-          "Grassland",
-          "Cropland"
-        ),
-        scaler = 1e-6,
-        units = " Mt",
-        legend_position = c(.1, 0.9)
-      )
-    } else if (input$GHG == "N2O") {
-      return(list(
-        subtitle =  expression(N[2] * O ~ " (tonnes)"),
-        landcover = c(
-          "Barren",
-          "Forestland",
-          "Wetland",
-          "Grassland",
-          "Cropland"
-        ),
-        scaler = 1e-3,
-        units = " kt",
-        legend_position = c(.1, 0.9)
-      ))
-    } else if (input$GHG == "CH4") {
-      return(list(
-        subtitle = expression(CH[4] ~ " (tonnes)"),
-        landcover = c(
-          "Barren",
-          "Forestland",
-          "Wetland",
-          "Grassland",
-          "Cropland"
-        ),
-        scaler = 1e-3,
-        units = " kt",
-        legend_position = c(.9, 0.25)
-      ))
+    # for yearly time_scale
+    if (input$time_scale == 1) {
+      if (input$GHG == "CO2") {
+        list(
+          subtitle = expression(CO[2] ~ " (tonnes)"),
+          landcover = c(
+            "Barren",
+            "Forestland",
+            "Wetland",
+            "Grassland",
+            "Cropland"
+          ),
+          scaler = 1e-6,
+          units = " Mt",
+          legend_position = c(.1, 0.9)
+        )
+      } else if (input$GHG == "N2O") {
+        return(
+          list(
+            subtitle =  expression(N[2] * O ~ " (tonnes)"),
+            landcover = c(
+              "Barren",
+              "Forestland",
+              "Wetland",
+              "Grassland",
+              "Cropland"
+            ),
+            scaler = 1e-3,
+            units = " kt",
+            legend_position = c(.1, 0.9)
+          )
+        )
+      } else if (input$GHG == "CH4") {
+        return(
+          list(
+            subtitle = expression(CH[4] ~ " (tonnes)"),
+            landcover = c(
+              "Barren",
+              "Forestland",
+              "Wetland",
+              "Grassland",
+              "Cropland"
+            ),
+            scaler = 1e-3,
+            units = " kt",
+            legend_position = c(.9, 0.25)
+          )
+        )
+      }
+      # now for seasonal time_scale
+    } else if (input$time_scale == 2) {
+      if (input$GHG == "CO2") {
+        list(
+          subtitle = expression(CO[2]),
+          landcover = c(
+            "Barren",
+            "Forestland",
+            "Wetland",
+            "Grassland",
+            "Cropland"
+          ),
+          scaler = 1e-6,
+          units = " Mt",
+          legend_position = c(.1, 0.9)
+          # limits = NULL
+        )
+      } else if (input$GHG == "N2O") {
+        return(
+          list(
+            subtitle =  expression(N[2] * O),
+            landcover = c(
+              "Barren",
+              "Forestland",
+              "Wetland",
+              "Grassland",
+              "Cropland"
+            ),
+            scaler = 1e-3,
+            units = " kt",
+            legend_position = c(.1, 0.9)
+            # limits = NULL
+          )
+        )
+      } else if (input$GHG == "CH4") {
+        return(
+          list(
+            subtitle = expression(CH[4]),
+            landcover = c(
+              "Barren",
+              "Forestland",
+              "Wetland",
+              "Grassland",
+              "Cropland"
+            ),
+            scaler = 1e-3,
+            units = " kt",
+            legend_position = c(.9, 0.25)
+            # limits = c(0, 16 * 1e6)
+          )
+        )
+      }
     }
   })
   output$distPlot <- renderPlot({
     # Calculate flux data -----------------------------------------------------
     plot_settings <- reactive_settings()
     
-    full_data_ghg <- read_csv("data/no_corr_roads.csv") %>%
-      bind_rows(read_csv("data/no_corr_no_roads.csv")) %>%
-      filter(
-        GHG == input$GHG &
-          Landcover %in% plot_settings$landcover &
-          Sealed_status == "fromsealing"
-      ) %>%
-      mutate(across(sd:upper, function(X) {
-        (X / 1e6)
-      }))
-    
-    roads_inc_ghg <- full_data_ghg %>% filter(source == "roads")
-    #
-    #
-    # # Now calculate bar order -------------------------------------------------
-    #
-    #
-    bar_order_ghg <- full_data_ghg %>% group_by(GHG, Landcover) %>%
-      filter(source == "roads") %>%
-      summarise(sum = sum(mean)) %>%
-      arrange(sum) %>%
-      rowid_to_column() %>%
-      dplyr::select(-sum)
-    
-    p <- full_data_ghg %>%
-      left_join(bar_order_ghg) %>%
-      ggplot() +
-      geom_col(aes(
-        x = reorder(Landcover, rowid),
-        y = mean,
-        fill = source
-      ), position = "identity") +
-      geom_errorbar(
-        data = roads_inc_ghg,
-        aes(
-          x = reorder(Landcover, mean, FUN = sum),
-          ymin = lower,
-          ymax = upper
-        ),
-        width = 0.4,
-        colour = "orange",
-        alpha = 0.9,
-        size = 1.3
-      ) +
-      geom_label(
-        data = roads_inc_ghg,
-        aes(
-          x = reorder(Landcover, mean, FUN = sum),
-          y = mean,
-          label = formatC(mean*plot_settings$scaler, digits = 2, format = "e", )
-        ),
-        vjust = -1,
-        colour = "black"
-      ) +
-      scale_y_continuous(
-        breaks = scales::pretty_breaks(n = 10),
-        # labels = label_number(scale_cut = cut_si("g"))
-        labels = label_number(scale = plot_settings$scaler, suffix = plot_settings$units)
-      ) +
-      scale_fill_manual(
-        values = c("roads" = "grey30", "other" = "purple"),
-        labels = c("Other sealing \nsurfaces", "Roads")
-      ) +
-      labs(
-        x = "Land cover",
-        y = expression("Flux not emitted due to sealing (" ~ log[10] ~ "scale)"),
-        fill = "",
-        subtitle =  plot_settings$subtitle
-      ) +
-      theme(
-        legend.position = "inside",
-        legend.position.inside = plot_settings$legend_position,
-        legend.background = element_blank()
-      )
-    
-    if (input$scale == "log") {
-      p <- p +
-        annotation_logticks(sides = "lr") +
-        scale_y_log10(
-          breaks = scales::trans_breaks("log10", function(x)
-            10 ^ x, n = 10),
-          labels = scales::trans_format("log10", scales::math_format(10 ^ .x))
-        )
+    if(input$scale == "log"){
+      y_scale_label <- "\n(log scale)"
+    }else{
+      y_scale_label <- ""
     }
-    # generate bins based on input$bins from ui.R
-    # x    <- faithful[, 2]
-    # bins <- seq(min(x), max(x), length.out = input$bins + 1)
-    #
-    # # draw the histogram with the specified number of bins
-    # hist(x, breaks = bins, col = 'darkgray', border = 'white',
-    #      xlab = 'Waiting time to next eruption (in mins)',
-    #      main = 'Histogram of waiting times')
     
+    if (input$time_scale == 1) {
+      
+      if(input$GHG == "All"){
+        ghg_compare_annual <- read_csv("data/ghg_saving_comparison_df.csv")
+        
+        p <- ghg_compare_annual %>% 
+          ggplot(aes(x = reorder(GHG, col_order), y = mean_co2e)) +
+          geom_col() +
+          geom_errorbar(
+            aes(ymin = lower_co2e, ymax = upper_co2e),
+            width = 0.4,
+            colour = "orange",
+            alpha = 0.9,
+            size = 1.3
+          )  +
+          geom_text(aes(label = round(1e-6 * mean_co2e, digits = 2)),
+                    vjust = -0.75,
+                    colour = "black") +
+          scale_y_continuous(
+            breaks = scales::pretty_breaks(n = 10),
+            labels = label_number(scale = 1e-6, suffix = " Mt")
+          ) +
+          scale_x_discrete(labels = c("All 3 GHGs", expression(CO[2]), expression(CH[4]), expression(N[2] *
+                                                                                                       O))) +
+          labs(x = "Greenhouse gas",
+               y = "Flux not \nemitted due\n to sealing",
+               subtitle =  expression(CO[2] * e))+
+          theme(text = element_text(size = 14),
+                axis.title.y = element_text(angle = 0, vjust = 0.5))
+      }else{
+      
+      full_data_ghg <- read_csv("data/no_corr_roads.csv") %>%
+        bind_rows(read_csv("data/no_corr_no_roads.csv")) %>%
+        filter(
+          GHG == input$GHG &
+            Landcover %in% plot_settings$landcover &
+            Sealed_status == "fromsealing"
+        ) %>%
+        mutate(across(sd:upper, function(X) {
+          (X / 1e6)
+        }))
+      
+      roads_inc_ghg <- full_data_ghg %>% filter(source == "roads")
+      
+      #
+      # # Now calculate bar order -------------------------------------------------
+      #
+      #
+      bar_order_ghg <- full_data_ghg %>% group_by(GHG, Landcover) %>%
+        filter(source == "roads") %>%
+        summarise(sum = sum(mean)) %>%
+        arrange(sum) %>%
+        rowid_to_column() %>%
+        dplyr::select(-sum)
+      
+      p <- full_data_ghg %>%
+        left_join(bar_order_ghg) %>%
+        ggplot() +
+        geom_col(aes(
+          x = reorder(Landcover, rowid),
+          y = mean,
+          fill = source
+        ), position = "identity") +
+        geom_errorbar(
+          data = roads_inc_ghg,
+          aes(
+            x = reorder(Landcover, mean, FUN = sum),
+            ymin = lower,
+            ymax = upper
+          ),
+          width = 0.4,
+          colour = "orange",
+          alpha = 0.9,
+          size = 1.3
+        ) +
+        geom_label(
+          data = roads_inc_ghg,
+          aes(
+            x = reorder(Landcover, mean, FUN = sum),
+            y = mean,
+            label = formatC(
+              mean * plot_settings$scaler,
+              digits = 2,
+              format = "e",
+              
+            )
+          ),
+          vjust = -1,
+          colour = "black"
+        ) +
+        scale_y_continuous(
+          breaks = scales::pretty_breaks(n = 10),
+          # labels = label_number(scale_cut = cut_si("g"))
+          labels = label_number(scale = plot_settings$scaler, suffix = plot_settings$units)
+        ) +
+        scale_fill_manual(
+          values = c("roads" = "grey30", "other" = "purple"),
+          labels = c("Other sealing \nsurfaces", "Roads")
+        ) +
+        labs(
+          x = "Land cover",
+          y = paste0("Flux not emitted \ndue to sealing",y_scale_label),
+          fill = "",
+          subtitle =  plot_settings$subtitle
+        ) +
+        theme(
+          legend.position = "inside",
+          legend.position.inside = plot_settings$legend_position,
+          legend.background = element_blank(),
+          axis.title.y = element_text(angle = 0, vjust = 0.5)
+        )
+      }
+      if (input$scale == "log") {
+        p <- p +
+          annotation_logticks(sides = "lr") +
+          scale_y_log10(
+            breaks = scales::trans_breaks("log10", function(x)
+              10 ^ x, n = 10),
+            labels = scales::trans_format("log10", scales::math_format(10 ^ .x))
+          )
+      }
+    } else if (input$time_scale == 2) {
+      if (input$GHG != "ALL") {
+        avg_monthly_fluxes <- read_csv(file = "data/avg_monthly_fluxes.csv")
+        
+        p <- avg_monthly_fluxes %>%
+          filter(GHG == input$GHG) %>%
+          mutate(
+            fill_order = case_match(
+              class,
+              "Wetland" ~ 1,
+              "Forestland" ~ 2,
+              "Barren" ~ 3,
+              "Cropland" ~ 4,
+              "Grassland" ~ 5
+            )
+          ) %>%
+          ggplot(aes(
+            y = mean,
+            x = month,
+            fill = reorder(class, fill_order)
+          )) +
+          geom_col(position = "stack") +
+          geom_hline(
+            aes(yintercept = trend),
+            linetype = "longdash",
+            colour = "lightblue",
+            alpha = 0.75
+          ) +
+          geom_hline(
+            aes(yintercept = trend_low),
+            # aes(yintercept = trend_low_q),
+            linetype = "dashed",
+            colour = "grey40",
+            alpha = 0.5
+          ) +
+          geom_hline(
+            aes(yintercept = trend_high),
+            # aes(yintercept = trend_high_q),
+            linetype = "dashed",
+            colour = "grey40",
+            alpha = 0.5
+          ) +
+          geom_errorbar(aes(ymin = sum_lower, ymax = sum_upper), width = 0.5) +
+          # geom_errorbar(aes(ymin = sum_lower_q, ymax = sum_upper_q), width = 0.5) +
+          scale_fill_manual(
+            values = c(
+              "Wetland" = "#440154FF",
+              "Grassland" = "#5DC863FF",
+              "Barren" = "#21908CFF",
+              "Cropland" = "#FDE725FF",
+              "Forestland" = "#3B528BFF"
+            )
+          ) +
+          scale_y_continuous(
+            labels = label_number(scale = plot_settings$scaler, suffix = plot_settings$units),
+            # Converts to Megaton and adds "Mt"
+            breaks = pretty_breaks(n = 10)
+            # limits = plot_settings$limits
+          ) +
+          labs(
+            fill = "",
+            x = "Month",
+            y = "Flux not\nemitted due\n to sealing",
+            subtitle = plot_settings$subtitle
+          )+
+          theme(axis.title.y = element_text(angle = 0, vjust = 0.5))
+      }else if (input$GHG == "ALL"){
+        co2e_monthly <- read_csv("data/co2e_monthly.csv")
+        p <- co2e_monthly %>%
+          mutate(
+            fill_order = case_match(
+              class,
+              "Wetland" ~ 1,
+              "Forestland" ~ 2,
+              "Barren" ~ 3,
+              "Cropland" ~ 4,
+              "Grassland" ~ 5
+            )
+          ) %>%
+          # pivot_longer(cols = c(mean, lower, upper)) %>%
+          # filter(GHG == "N2O") %>%
+          ggplot(aes(
+            y = mean,
+            x = month,
+            fill = reorder(class, fill_order)
+          )) +
+          geom_col(position = "stack") +
+          geom_hline(
+            aes(yintercept = trend),
+            linetype = "longdash",
+            colour = "lightblue",
+            alpha = 0.75
+          ) +
+          geom_hline(
+            aes(yintercept = trend_low_q),
+            linetype = "dashed",
+            colour = "grey40",
+            alpha = 0.5
+          ) +
+          geom_hline(
+            aes(yintercept = trend_high_q),
+            linetype = "dashed",
+            colour = "grey40",
+            alpha = 0.5
+          ) +
+          geom_errorbar(aes(ymin = sum_lower_q, ymax = sum_upper_q),
+                        width = 0.5,
+                        colour = "black") +
+          scale_fill_manual(
+            values = c(
+              "Wetland" = "#440154FF",
+              "Grassland" = "#5DC863FF",
+              "Barren" = "#21908CFF",
+              "Cropland" = "#FDE725FF",
+              "Forestland" = "#3B528BFF"
+            )
+          ) +
+          scale_colour_viridis_d() +
+          scale_y_continuous(labels = label_number(scale = 1e-6, suffix = " Mt"),
+                             # Converts to Megaton and adds "Mt"
+                             breaks = pretty_breaks(n = 10),
+                             limits = c(0, 16*1e6)) +
+          labs(
+            fill = "",
+            x = "Month",
+            y = "Flux not\nemitted due\nto sealing",
+            subtitle = expression(CO[2] * e)
+          )+
+          theme(axis.title.y = element_text(angle = 0, vjust = 0.5))
+        
+      }
+      
+    }
     print(p)
     
   })
