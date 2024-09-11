@@ -30,10 +30,10 @@ fluidPage(# Application title
           inputId = "GHG",
           label = "Greenhouse Gas",
           choices = list(
-            "All GHGs" = "All",
             "CO2" = "CO2",
             "CH4" = "CH4",
-            "N2O" = "N2O"
+            "N2O" = "N2O",
+            "All of the above" = "All"
           ),
           selected = "CO2"
         ),

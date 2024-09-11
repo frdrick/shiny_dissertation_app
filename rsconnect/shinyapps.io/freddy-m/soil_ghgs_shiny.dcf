@@ -1,0 +1,10 @@
+name: soil_ghgs_shiny
+title:
+username: freddy-m
+account: freddy-m
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 12665761
+bundleId: 9084212
+url: https://freddy-m.shinyapps.io/soil_ghgs_shiny/
+version: 1
